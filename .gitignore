@@ -1,0 +1,14 @@
+.DS_Store
+__pycache__/
+*.pyc
+.env
+*.db
+*.db-shm
+*.db-wal
+token.json
+credentials.json
+.venv/
+dist/
+*.egg-info/
+.ruff_cache/
+.pytest_cache/

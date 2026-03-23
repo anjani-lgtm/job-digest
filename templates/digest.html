@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Job Digest — {{ jobs|length }} Scored Roles</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #f8f9fa;
+    color: #1a1a2e;
+    padding: 24px;
+  }
+  .container { max-width: 1200px; margin: 0 auto; }
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 16px;
+    padding-bottom: 16px;
+    border-bottom: 2px solid #1a1a2e;
+  }
+  header h1 { font-size: 24px; }
+  header .meta { font-size: 13px; color: #666; }
+  .controls {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+  }
+  .controls label { font-size: 13px; font-weight: 600; color: #444; }
+  .controls select, .controls input {
+    font-size: 13px;
+    padding: 6px 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background: #fff;
+  }
+  .controls .count { font-size: 13px; color: #666; margin-left: auto; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background: #fff;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  }
+  thead th {
+    background: #1a1a2e;
+    color: #fff;
+    text-align: left;
+    padding: 12px 14px;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+  }
+  thead th:hover { background: #2d2d4e; }
+  thead th .sort-arrow { margin-left: 4px; opacity: 0.5; }
+  thead th.sorted-asc .sort-arrow,
+  thead th.sorted-desc .sort-arrow { opacity: 1; }
+  tbody tr { border-bottom: 1px solid #eee; }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: #f8f9ff; }
+  tbody td { padding: 12px 14px; font-size: 14px; vertical-align: top; }
+  .rank { color: #999; font-size: 13px; text-align: center; }
+  .company-name { font-weight: 600; text-transform: capitalize; }
+  .role-name a {
+    color: #1a1a2e;
+    text-decoration: none;
+    font-weight: 500;
+  }
+  .role-name a:hover { text-decoration: underline; }
+  .badge {
+    display: inline-block;
+    font-size: 13px;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 12px;
+    color: #fff;
+    min-width: 36px;
+    text-align: center;
+  }
+  .badge-green { background: #22c55e; }
+  .badge-amber { background: #f59e0b; }
+  .badge-red { background: #ef4444; }
+  .badge-gray { background: #94a3b8; }
+  .reasons-toggle {
+    background: none;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-size: 12px;
+    cursor: pointer;
+    color: #666;
+  }
+  .reasons-toggle:hover { background: #f0f0f0; }
+  .reasons-row td {
+    padding: 0 14px 12px 14px;
+    background: #fafbfc;
+  }
+  .reasons-row ul {
+    margin: 0;
+    padding-left: 18px;
+    font-size: 13px;
+    color: #555;
+    line-height: 1.7;
+  }
+  .reasons-row.hidden { display: none; }
+  .apply-btn {
+    display: inline-block;
+    background: #1a1a2e;
+    color: #fff;
+    text-decoration: none;
+    font-size: 12px;
+    padding: 6px 14px;
+    border-radius: 4px;
+    white-space: nowrap;
+  }
+  .apply-btn:hover { background: #2d2d4e; }
+  .source-tag {
+    font-size: 11px;
+    color: #999;
+    display: block;
+    margin-top: 4px;
+  }
+  footer {
+    text-align: center;
+    margin-top: 24px;
+    font-size: 12px;
+    color: #999;
+  }
+  @media (max-width: 768px) {
+    body { padding: 12px; }
+    thead th, tbody td { padding: 10px 8px; font-size: 13px; }
+    .hide-mobile { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+<header>
+  <h1>Job Digest</h1>
+  <span class="meta">{{ generated_at }} &middot; {{ jobs|length }} roles scored</span>
+</header>
+
+<div class="controls">
+  <label for="min-score">Min Score:</label>
+  <select id="min-score" onchange="filterTable()">
+    <option value="0">All</option>
+    <option value="40">40+</option>
+    <option value="60">60+</option>
+    <option value="70" selected>70+</option>
+    <option value="80">80+</option>
+    <option value="90">90+</option>
+  </select>
+  <label for="search-box">Search:</label>
+  <input id="search-box" type="text" placeholder="company, role, location..." oninput="filterTable()" style="width:200px;">
+  <span class="count" id="visible-count"></span>
+</div>
+
+<table id="digest-table">
+  <thead>
+    <tr>
+      <th onclick="sortTable(0)"># <span class="sort-arrow">&#9662;</span></th>
+      <th onclick="sortTable(1)">Score <span class="sort-arrow">&#9662;</span></th>
+      <th onclick="sortTable(2)">Company</th>
+      <th onclick="sortTable(3)">Role</th>
+      <th onclick="sortTable(4)" class="hide-mobile">Department</th>
+      <th onclick="sortTable(5)" class="hide-mobile">Location</th>
+      <th>Apply</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for job in jobs %}
+    <tr data-idx="{{ loop.index0 }}" data-score="{{ job.fit_score | int }}">
+      <td class="rank">{{ loop.index }}</td>
+      <td>
+        {% set score = job.fit_score | int %}
+        {% if score >= 80 %}
+        <span class="badge badge-green">{{ score }}</span>
+        {% elif score >= 60 %}
+        <span class="badge badge-amber">{{ score }}</span>
+        {% elif score >= 40 %}
+        <span class="badge badge-red">{{ score }}</span>
+        {% else %}
+        <span class="badge badge-gray">{{ score }}</span>
+        {% endif %}
+      </td>
+      <td class="company-name">{{ job.company }}</td>
+      <td class="role-name"><a href="{{ job.url }}" target="_blank" rel="noopener">{{ job.title }}</a></td>
+      <td class="hide-mobile">{{ job.department or '—' }}</td>
+      <td class="hide-mobile">{{ job.location or '—' }}</td>
+      <td><a class="apply-btn" href="{{ job.url }}" target="_blank" rel="noopener">Apply &rarr;</a>
+        <span class="source-tag">via {{ job.source }}</span>
+      </td>
+      <td>
+        {% if job.match_reasons %}
+        <button class="reasons-toggle" onclick="toggleReasons({{ loop.index0 }})">Why?</button>
+        {% endif %}
+      </td>
+    </tr>
+    {% if job.match_reasons %}
+    <tr class="reasons-row hidden" id="reasons-{{ loop.index0 }}">
+      <td colspan="8">
+        <ul>
+          {% for reason in job.match_reasons %}
+          <li>{{ reason }}</li>
+          {% endfor %}
+        </ul>
+      </td>
+    </tr>
+    {% endif %}
+    {% endfor %}
+  </tbody>
+</table>
+
+<footer>Generated by job-digest</footer>
+
+</div>
+
+<script>
+function toggleReasons(idx) {
+  const row = document.getElementById('reasons-' + idx);
+  row.classList.toggle('hidden');
+}
+
+function filterTable() {
+  const minScore = parseInt(document.getElementById('min-score').value);
+  const search = document.getElementById('search-box').value.toLowerCase();
+  const tbody = document.getElementById('digest-table').tBodies[0];
+  const allRows = Array.from(tbody.rows);
+  let visible = 0;
+  let rank = 0;
+
+  let i = 0;
+  while (i < allRows.length) {
+    const row = allRows[i];
+    let reasonsRow = null;
+    if (i + 1 < allRows.length && allRows[i + 1].classList.contains('reasons-row')) {
+      reasonsRow = allRows[i + 1];
+      i += 2;
+    } else {
+      i += 1;
+    }
+
+    const score = parseInt(row.getAttribute('data-score') || '0');
+    const text = row.textContent.toLowerCase();
+    const show = score >= minScore && (search === '' || text.includes(search));
+
+    row.style.display = show ? '' : 'none';
+    if (reasonsRow) {
+      reasonsRow.style.display = show ? '' : 'none';
+      if (!show) reasonsRow.classList.add('hidden');
+    }
+    if (show) {
+      rank++;
+      row.cells[0].textContent = rank;
+      visible++;
+    }
+  }
+
+  document.getElementById('visible-count').textContent = visible + ' of {{ jobs|length }} shown';
+}
+
+function sortTable(colIdx) {
+  const table = document.getElementById('digest-table');
+  const tbody = table.tBodies[0];
+  const dataRows = [];
+
+  const allRows = Array.from(tbody.rows);
+  let i = 0;
+  while (i < allRows.length) {
+    const row = allRows[i];
+    let reasonsRow = null;
+    if (i + 1 < allRows.length && allRows[i + 1].classList.contains('reasons-row')) {
+      reasonsRow = allRows[i + 1];
+      i += 2;
+    } else {
+      i += 1;
+    }
+    dataRows.push({ data: row, reasons: reasonsRow });
+  }
+
+  // Toggle sort direction
+  const th = table.tHead.rows[0].cells[colIdx];
+  const isDesc = th.classList.contains('sorted-desc');
+  Array.from(table.tHead.rows[0].cells).forEach(c => {
+    c.classList.remove('sorted-asc', 'sorted-desc');
+  });
+  th.classList.add(isDesc ? 'sorted-asc' : 'sorted-desc');
+  const dir = isDesc ? 1 : -1;
+
+  dataRows.sort((a, b) => {
+    const aText = a.data.cells[colIdx].textContent.trim();
+    const bText = b.data.cells[colIdx].textContent.trim();
+    const aNum = parseFloat(aText);
+    const bNum = parseFloat(bText);
+    if (!isNaN(aNum) && !isNaN(bNum)) return (bNum - aNum) * dir;
+    return aText.localeCompare(bText) * -dir;
+  });
+
+  dataRows.forEach(pair => {
+    tbody.appendChild(pair.data);
+    if (pair.reasons) tbody.appendChild(pair.reasons);
+  });
+
+  // Re-number visible ranks
+  let rank = 0;
+  dataRows.forEach(pair => {
+    if (pair.data.style.display !== 'none') {
+      rank++;
+      pair.data.cells[0].textContent = rank;
+    }
+  });
+}
+
+// Apply default filter on load
+filterTable();
+</script>
+</body>
+</html>
