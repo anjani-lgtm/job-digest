@@ -3,6 +3,7 @@ __pycache__/
 *.pyc
 .env
 config/profile.json
+config/preferences.json
 *.db
 *.db-shm
 *.db-wal
