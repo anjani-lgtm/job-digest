@@ -6,6 +6,7 @@ import json
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Optional
 
 from job_digest.config import env
 from job_digest.models import Job, ScoredJob
@@ -127,13 +128,37 @@ def get_top_jobs(conn: sqlite3.Connection, limit: int = 10) -> list[dict]:
     return [dict(r) for r in rows]
 
 
-def get_all_scored_jobs(conn: sqlite3.Connection) -> list[dict]:
-    """All scored jobs, ranked by fit_score descending."""
+def get_all_scored_jobs(
+    conn: sqlite3.Connection,
+    exclude_companies: Optional[list[str]] = None,
+    max_age_days: Optional[int] = None,
+) -> list[dict]:
+    """All scored jobs, ranked by fit_score descending, with optional filters."""
+    conditions = []
+    params: list = []
+
+    if exclude_companies:
+        placeholders = ",".join("?" for _ in exclude_companies)
+        conditions.append(f"j.company NOT IN ({placeholders})")
+        params.extend(c.lower() for c in exclude_companies)
+
+    if max_age_days is not None:
+        conditions.append(
+            "(j.posted_at IS NULL OR j.posted_at >= datetime('now', ?))"
+        )
+        params.append(f"-{max_age_days} days")
+
+    where = ""
+    if conditions:
+        where = "WHERE " + " AND ".join(conditions)
+
     rows = conn.execute(
-        """SELECT j.*, s.fit_score, s.match_reasons
+        f"""SELECT j.*, s.fit_score, s.match_reasons
            FROM jobs j
            JOIN scored_jobs s ON j.id = s.job_id
-           ORDER BY s.fit_score DESC"""
+           {where}
+           ORDER BY s.fit_score DESC""",
+        params,
     ).fetchall()
     return [dict(r) for r in rows]
 

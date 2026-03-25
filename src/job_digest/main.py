@@ -157,14 +157,98 @@ def _score() -> int:
     return len(scores)
 
 
+# Companies to exclude (>300 employees or not relevant)
+_EXCLUDED_COMPANIES = [
+    "openai",
+    "airtable", "anthropic", "betterup", "duolingo", "figma",
+    "hellofresh", "multiverse", "notion", "oura", "patreon",
+    "peloton", "ro", "swordhealth", "whoop",
+]
+
+# International locations to filter out (keep US + remote only)
+_INTERNATIONAL_PATTERNS = [
+    "germany", "berlin", "munich", "hamburg",
+    "united kingdom", "london", "uk",
+    "canada", "toronto", "vancouver",
+    "india", "bangalore", "mumbai",
+    "china", "beijing", "shanghai",
+    "japan", "tokyo",
+    "australia", "sydney", "melbourne", "auckland",
+    "netherlands", "amsterdam",
+    "france", "paris",
+    "ireland", "dublin",
+    "singapore",
+    "brazil",
+    "mexico",
+    "belgium",
+    "spain", "madrid", "barcelona",
+    "italy",
+    "poland", "warsaw",
+    "sweden", "stockholm",
+    "denmark", "copenhagen",
+    "korea", "seoul",
+    "israel", "tel aviv",
+    "portugal", "lisbon",
+    "austria", "vienna",
+    "czech", "prague",
+    "switzerland", "zurich",
+    "new zealand",
+]
+
+
+def _is_us_or_remote(location: str) -> bool:
+    """Return True if the location appears to be US-based or remote."""
+    if not location:
+        return True  # No location info — keep it
+    loc = location.lower()
+    # Explicitly US or remote
+    if any(term in loc for term in ["remote", "united states", ", us", "usa"]):
+        return True
+    # Known US state abbreviations at end of location string (e.g. "Boston, MA")
+    us_states = [
+        "al", "ak", "az", "ar", "ca", "co", "ct", "de", "fl", "ga",
+        "hi", "id", "il", "in", "ia", "ks", "ky", "la", "me", "md",
+        "ma", "mi", "mn", "ms", "mo", "mt", "ne", "nv", "nh", "nj",
+        "nm", "ny", "nc", "nd", "oh", "ok", "or", "pa", "ri", "sc",
+        "sd", "tn", "tx", "ut", "vt", "va", "wa", "wv", "wi", "wy", "dc",
+    ]
+    parts = [p.strip().lower() for p in location.split(",")]
+    if parts[-1] in us_states:
+        return True
+    # Known US cities
+    us_cities = [
+        "san francisco", "new york", "los angeles", "chicago", "seattle",
+        "austin", "boston", "denver", "portland", "miami", "atlanta",
+        "washington", "philadelphia", "san diego", "san jose", "oakland",
+        "palo alto", "mountain view", "menlo park", "sunnyvale",
+        "cupertino", "redwood city", "south san francisco",
+    ]
+    if any(city in loc for city in us_cities):
+        return True
+    # Check for international patterns
+    if any(intl in loc for intl in _INTERNATIONAL_PATTERNS):
+        return False
+    # Default: keep it (ambiguous locations are likely US)
+    return True
+
+
 def _publish() -> int:
     """Publish all scored jobs to docs/index.html, ranked by score."""
     conn = get_connection()
-    all_jobs = get_all_scored_jobs(conn)
+    all_jobs = get_all_scored_jobs(
+        conn,
+        exclude_companies=_EXCLUDED_COMPANIES,
+        max_age_days=14,
+    )
     if not all_jobs:
         log.info("No scored jobs to publish.")
         conn.close()
         return 0
+
+    # Filter to US/remote locations only
+    before = len(all_jobs)
+    all_jobs = [j for j in all_jobs if _is_us_or_remote(j.get("location", ""))]
+    log.info("Location filter: %d → %d jobs (removed %d international)", before, len(all_jobs), before - len(all_jobs))
 
     log.info("Publishing digest with %d scored jobs...", len(all_jobs))
     path = publish_digest(all_jobs)
